@@ -21,7 +21,7 @@ export function getDexieHistory(storageRegistry: StorageRegistry) {
             })
         })
 
-    return versions
+    return patchDirectLinksSchema(versions)
 }
 
 function getDexieSchema(collections: RegistryCollections) {
@@ -69,3 +69,36 @@ const convertIndexToDexieExps = ({ fields, indices }: CollectionDefinition) =>
             return `${listPrefix}${indexDef.field}`
         })
         .join(', ')
+
+/**
+ * Takes the generated schema versions, based on the registed collections, finds the
+ * first one in which `directLinks` schema was added, then generates a "patch" schema.
+ * This "patch" schema should contain the incorrect indexes that was accidently rolled out
+ * to users at the release of our Direct Links feature. This should ensure Dexie knows about
+ * both the incorrect indexes and how to drop those to migrate to the correct indexes.
+ */
+function patchDirectLinksSchema(schemaVersions: DexieSchema[]): DexieSchema[] {
+    const firstAppears = schemaVersions.findIndex(
+        ({ schema }) => schema.directLinks != null,
+    )
+
+    // Return schemas as-is if direct links schema not found (tests)
+    if (firstAppears === -1) {
+        return schemaVersions
+    }
+
+    const preceding = schemaVersions[firstAppears - 1]
+
+    const patchedSchema = {
+        schema: {
+            ...preceding.schema,
+            directLinks: 'url, *pageTitle, *body, createdWhen',
+        },
+        migrations: [],
+        version: preceding.version + 0.5,
+    }
+
+    // Note that order of these schemas should not matter; Dexie should re-order schemas according
+    //  to version before setting up the DB
+    return [...schemaVersions, patchedSchema]
+}

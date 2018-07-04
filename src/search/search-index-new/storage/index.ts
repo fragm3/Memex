@@ -160,6 +160,7 @@ export default class Storage extends Dexie {
         dexieHistory.forEach(({ version, schema, migrations }) => {
             const finalVersion = baseVersion + version
             const finalSchema = schema
+            console.log(finalVersion, finalSchema)
             this.version(finalVersion)
                 .stores(finalSchema)
                 .upgrade(() => {
